@@ -14,6 +14,7 @@ local theme_parser = require("ghostty-dynamic.theme_parser")
 local highlighter = require("ghostty-dynamic.highlighter")
 
 local timer = nil
+local theme_timer = nil
 local initialized = false
 
 function M.get_system_appearance()
@@ -31,16 +32,7 @@ local function resolve_theme(theme_value, config_path)
   end
 
   if type(theme_value) == "string" then
-    local light_theme, dark_theme = theme_value:match("^light:(.-)[,\n]%s*dark:(.-)$")
-    if light_theme and dark_theme then
-      local appearance = config_mod.get_system_appearance()
-      if appearance == "dark" then
-        return dark_theme
-      else
-        return light_theme
-      end
-    end
-    return theme_value
+    return config_mod.resolve_appearance_theme(theme_value) or theme_value
   end
 
   return nil
@@ -81,21 +73,18 @@ function M.setup(opts)
   local theme = theme_parser.expand_colors(raw_theme)
   highlighter.apply_theme(theme, M.config)
 
-  local function refresh_lualine()
-    if package.loaded["lualine"] then
-      local lualine = require("lualine")
-      local config = lualine.get_config()
-      lualine.setup(config)
-    else
-      vim.defer_fn(refresh_lualine, 100)
-    end
-  end
-  vim.defer_fn(refresh_lualine, 10)
-
   if M.config.watch and not initialized then
     initialized = true
     M._start_watcher()
   end
+end
+
+local function reapply_if_needed()
+  if not highlighter.is_theme_intact() then
+    vim.schedule(function() M.setup(M.config) end)
+    return true
+  end
+  return false
 end
 
 function M._start_watcher()
@@ -104,31 +93,25 @@ function M._start_watcher()
     return
   end
 
-  if timer then
-    timer:close()
-  end
+  if timer then timer:close() end
+  if theme_timer then theme_timer:close() end
 
   local last_config_mtime = 0
   local last_theme_mtime = 0
-  local watch_interval = M.config.watch_interval
-  if watch_interval == nil then watch_interval = 1 end
-  local theme_check_interval = M.config.theme_check_interval
-  if theme_check_interval == nil then theme_check_interval = 5 end
+  local watch_interval = M.config.watch_interval or 1
+  local theme_check_interval = M.config.theme_check_interval or 5
 
   local function get_mtime(path)
     local stat = vim.loop.fs_stat(path)
-    if stat then
-      return stat.mtime.sec
-    end
-    return 0
+    return stat and stat.mtime.sec or 0
   end
 
   local function check_config_changes()
+    if reapply_if_needed() then return end
+
     local new_config_mtime = get_mtime(config_path)
     if new_config_mtime > last_config_mtime and last_config_mtime > 0 then
-      vim.schedule(function()
-        M.setup(M.config)
-      end)
+      vim.schedule(function() M.setup(M.config) end)
       last_config_mtime = new_config_mtime
       return
     end
@@ -140,9 +123,7 @@ function M._start_watcher()
       if theme_path then
         local new_theme_mtime = get_mtime(theme_path)
         if new_theme_mtime > last_theme_mtime and last_theme_mtime > 0 then
-          vim.schedule(function()
-            M.setup(M.config)
-          end)
+          vim.schedule(function() M.setup(M.config) end)
         end
         last_theme_mtime = new_theme_mtime
       end
@@ -150,27 +131,12 @@ function M._start_watcher()
   end
 
   local function check_system_theme()
+    if reapply_if_needed() then return end
+
     local current_appearance = config_mod.get_system_appearance()
-    if M._last_system_appearance == nil then
+    if current_appearance ~= M._last_system_appearance then
       M._last_system_appearance = current_appearance
-      vim.schedule(function()
-        M.setup(M.config)
-        if package.loaded["lualine"] then
-          local lualine = require("lualine")
-          local config = lualine.get_config()
-          lualine.setup(config)
-        end
-      end)
-    elseif current_appearance ~= M._last_system_appearance then
-      M._last_system_appearance = current_appearance
-      vim.schedule(function()
-        M.setup(M.config)
-        if package.loaded["lualine"] then
-          local lualine = require("lualine")
-          local config = lualine.get_config()
-          lualine.setup(config)
-        end
-      end)
+      vim.schedule(function() M.setup(M.config) end)
     end
   end
 
@@ -190,7 +156,6 @@ function M._start_watcher()
     end
   end
 
-  local theme_timer = nil
   if theme_check_interval > 0 then
     theme_timer = vim.loop.new_timer()
     if theme_timer then
@@ -201,12 +166,8 @@ function M._start_watcher()
   vim.api.nvim_create_autocmd("VimLeave", {
     once = true,
     callback = function()
-      if timer then
-        timer:close()
-      end
-      if theme_timer then
-        theme_timer:close()
-      end
+      if timer then timer:close() end
+      if theme_timer then theme_timer:close() end
     end,
   })
 end

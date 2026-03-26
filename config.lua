@@ -5,17 +5,17 @@ local function file_exists(path)
 end
 
 function M.get_system_appearance()
-  local handle = io.popen("gsettings get org.gnome.desktop.interface color-scheme 2>/dev/null")
-  if handle then
-    local result = handle:read("*a")
-    handle:close()
-    if result and result:match("prefer%-dark") then
-      return "dark"
-    end
-  end
-
   local uname = vim.loop.os_uname().sysname
-  if uname == "Darwin" then
+  if uname == "Linux" then
+    local handle = io.popen("gsettings get org.gnome.desktop.interface color-scheme 2>/dev/null")
+    if handle then
+      local result = handle:read("*a")
+      handle:close()
+      if result and result:match("prefer%-dark") then
+        return "dark"
+      end
+    end
+  elseif uname == "Darwin" then
     local handle = io.popen("dark-mode 2>/dev/null")
     if handle then
       local result = handle:read("*a")
@@ -47,6 +47,18 @@ function M.get_ghostty_config_path()
   return nil
 end
 
+function M.resolve_appearance_theme(theme_str)
+  local light_theme, dark_theme = theme_str:match("^light:(.-)[,\n]%s*dark:(.-)$")
+  if not light_theme or not dark_theme then
+    return nil
+  end
+  local appearance = M.get_system_appearance()
+  if appearance == "dark" then
+    return dark_theme:gsub('"', ""):gsub("'", "")
+  end
+  return light_theme:gsub('"', ""):gsub("'", "")
+end
+
 function M.get_current_theme_name(config_path)
   if not config_path or not file_exists(config_path) then
     return nil
@@ -56,18 +68,7 @@ function M.get_current_theme_name(config_path)
     local theme = line:match("^theme%s*=%s*(.+)")
     if theme then
       theme = theme:gsub("%s+", "")
-
-      local light_theme, dark_theme = theme:match("^light:(.-)[,\n]%s*dark:(.-)$")
-      if light_theme and dark_theme then
-        local appearance = M.get_system_appearance()
-        if appearance == "dark" then
-          return dark_theme:gsub('"', ""):gsub("'", "")
-        else
-          return light_theme:gsub('"', ""):gsub("'", "")
-        end
-      end
-
-      return theme:gsub('"', ""):gsub("'", "")
+      return M.resolve_appearance_theme(theme) or theme:gsub('"', ""):gsub("'", "")
     end
   end
 

@@ -39,7 +39,7 @@ function M.parse_theme_file(file_path)
         theme.background = value:gsub("#", "")
       elseif key == "foreground" then
         theme.foreground = value:gsub("#", "")
-      elseif key == "cursor-color" or key == "cursor-color" then
+      elseif key == "cursor-color" then
         theme.cursor_color = value:gsub("#", "")
       elseif key == "cursor-text" then
         theme.cursor_text = value:gsub("#", "")
