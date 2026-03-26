@@ -37,12 +37,54 @@ require("ghostty-dynamic").setup({
   watch = true,
   
   -- Override theme name (skip reading Ghostty config)
+  -- Can be a string, table, or nil
   theme = nil,
   
   -- Custom highlight overrides
   overrides = {},
+
+  -- Interval in seconds to check for Ghostty config file changes (default: 1)
+  -- Set to 0 to disable automatic reload on config changes
+  watch_interval = 1,
+
+  -- Interval in seconds to check for system theme changes (default: 5)
+  -- Set to 0 to disable automatic theme switching on system theme change
+  theme_check_interval = 5,
 })
 ```
+
+### Light/Dark Mode Support
+
+The plugin supports automatic theme switching based on system appearance:
+
+**Supported system theme detection:**
+- GNOME Linux: `gsettings get org.gnome.desktop.interface color-scheme`
+- macOS: `dark-mode` command
+
+**Usage options:**
+
+1. **String syntax** (same as Ghostty config):
+```lua
+require("ghostty-dynamic").setup({
+  theme = "light:Catppuccin Latte,dark:Catppuccin Frappe",
+})
+```
+
+2. **Table syntax**:
+```lua
+require("ghostty-dynamic").setup({
+  theme = {
+    light = "Catppuccin Latte",
+    dark = "Catppuccin Frappe",
+  },
+})
+```
+
+3. **From Ghostty config**: The plugin automatically reads `theme = light:X,dark:Y` from your Ghostty config file.
+
+### Helper Functions
+
+- `require("ghostty-dynamic").get_system_appearance()` - Returns `"light"` or `"dark"` based on system theme
 
 ## Usage
 

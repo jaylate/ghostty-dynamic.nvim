@@ -4,6 +4,31 @@ local function file_exists(path)
   return vim.loop.fs_stat(path) ~= nil
 end
 
+function M.get_system_appearance()
+  local handle = io.popen("gsettings get org.gnome.desktop.interface color-scheme 2>/dev/null")
+  if handle then
+    local result = handle:read("*a")
+    handle:close()
+    if result and result:match("prefer%-dark") then
+      return "dark"
+    end
+  end
+
+  local uname = vim.loop.os_uname().sysname
+  if uname == "Darwin" then
+    local handle = io.popen("dark-mode 2>/dev/null")
+    if handle then
+      local result = handle:read("*a")
+      handle:close()
+      if result and result:match("on") then
+        return "dark"
+      end
+    end
+  end
+
+  return "light"
+end
+
 function M.get_ghostty_config_path()
   local xdg = os.getenv("XDG_CONFIG_HOME") or (os.getenv("HOME") .. "/.config")
   local paths = {
@@ -32,21 +57,14 @@ function M.get_current_theme_name(config_path)
     if theme then
       theme = theme:gsub("%s+", "")
 
-      local light, dark = theme:match("light:(%w+)%,?dark:(%w+)")
-      if light and dark then
-        local appearance = vim.loop.os_uname().sysname
-        if appearance == "Darwin" or appearance == "Linux" then
-          local handle = io.popen("dark-mode 2>/dev/null || cat /sys/class/dmi/id/product_version 2>/dev/null || echo 'unknown'")
-          if handle then
-            local result = handle:read("*a"):match("%S+")
-            handle:close()
-            if result and result:find("[Aa]pple") or result:find("mac") then
-              return dark
-            end
-          end
-          return dark
+      local light_theme, dark_theme = theme:match("^light:(.-)[,\n]%s*dark:(.-)$")
+      if light_theme and dark_theme then
+        local appearance = M.get_system_appearance()
+        if appearance == "dark" then
+          return dark_theme:gsub('"', ""):gsub("'", "")
+        else
+          return light_theme:gsub('"', ""):gsub("'", "")
         end
-        return dark
       end
 
       return theme:gsub('"', ""):gsub("'", "")

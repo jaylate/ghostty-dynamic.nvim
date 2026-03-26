@@ -10,14 +10,12 @@ if ok and bg then
   vim.cmd("hi Normal guibg=" .. bg)
 end
 
--- Load full theme after UI is ready
-vim.api.nvim_create_autocmd("UIEnter", {
+-- Load full theme at VimEnter
+vim.api.nvim_create_autocmd("VimEnter", {
   once = true,
   callback = function()
-    vim.defer_fn(function()
-      pcall(require("ghostty-dynamic").setup, {
-        watch = true,
-      })
-    end, 10)
+    pcall(require("ghostty-dynamic").setup, {
+      watch = true,
+    })
   end,
 })
